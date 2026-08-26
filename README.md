@@ -1,3 +1,4 @@
+https://doi.org/10.5281/zenodo.22117185
 
 # Robustified CUSUM for Anomaly Detection in Heteroscedastic Streaming Environments
 
