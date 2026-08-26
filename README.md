@@ -1,5 +1,4 @@
 
-```markdown
 # Robustified CUSUM for Anomaly Detection in Heteroscedastic Streaming Environments
 
 ## Overview
@@ -49,4 +48,4 @@ If you use this code or findings in your own work, please cite:
 ## Contact
 **Vobo Godlove Watoh**  
 Email: vobo.caleb@yahoo.com
-```
+
