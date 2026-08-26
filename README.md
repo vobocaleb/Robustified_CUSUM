@@ -23,7 +23,7 @@ accepted at ICCIS 2026.
 
 ## Requirements
 - R (version 4.0 or higher)
-- No additional packages required (uses base R only)
+- intall ggplot3 “install.package (ggplot2)”
 
 ## How to run
 1. Clone this repository
