@@ -1,0 +1,620 @@
+---
+title: "Robustified CUSUM for Anomaly Detection in Heterocesdastic Streaming Environments"
+author: "Vobo Godlove Watoh ( gold Medalist, Gujarat University)"
+date: "`r Sys.Date()`"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+#Scenario 2: Step change in variance (1 --> 4 at change_point)
+#Data generation
+# Step 1: Create 1,000 numbers
+
+n <- 1000                    # total numbers
+change_point <- 500          # anomaly starts here
+
+# First 500 numbers: mean = 0, standard deviation = 1
+normal_part <- rnorm(500, mean = 0, sd = 1)
+
+# Last 500 numbers: mean = 1, standard deviation = 2
+anomaly_part <- rnorm(500, mean = 1, sd = 2)
+
+# Combine them into one sequence of 1,000 numbers
+my_data <- c(normal_part, anomaly_part)
+
+# Look at the first 20 numbers
+head(data, 20)
+
+```
+
+
+```{r}
+#Robustified CUSUM
+# Step 2:  Robustified CUSUM Method
+
+robust_cusum_fixed <- function(x, delta = 1.5, burn_in = 50, threshold = 5) {
+  
+  # Huber's psi function (ignores extreme outliers)
+psi_huber <- function(u, c = 1.345) {
+  ifelse(abs(u) <= c, u, c * sign(u))
+}
+  n <- length(x)
+  mu_hat <- numeric(n)      # stores estimated mean over time
+  sigma_hat <- numeric(n)   # stores estimated standard deviation over time
+  S <- numeric(n)           # stores the CUSUM alarm statistic
+  
+  # Start with first observation
+  mu_hat[1] <- x[1]
+  sigma_hat[1] <- 1
+  S[1] <- 0
+  
+  # Process observations one by one
+  for (t in 2:n) {
+    # Standardized residual
+    r <- (x[t] - mu_hat[t-1]) / sigma_hat[t-1]
+    
+    # Update mean estimate (recursive M-estimator)
+    psi_val <- psi_huber(r)
+    mu_hat[t] <- mu_hat[t-1] + (1/t) * psi_val * sigma_hat[t-1]
+    
+    # Update standard deviation estimate (robust scale)
+    chi_val <- psi_val^2 / 0.6827  # 0.6827 = expected value for normal
+    sigma_hat[t] <- sqrt(sigma_hat[t-1]^2 + (1/(t-1)) * (chi_val * sigma_hat[t-1]^2 - sigma_hat[t-1]^2))
+    
+    # Update CUSUM alarm statistic
+    r_new <- (x[t] - mu_hat[t-1]) / sigma_hat[t-1]
+    # Only start monitoring after burn-in period
+    if (t > burn_in) {
+      S[t] <- max(0, S[t-1] + r_new - delta)
+    } else {
+      S[t] <- 0
+    }
+  }
+  
+  return(S)
+}
+# Run with burn-in period
+result_fixed <- robust_cusum_fixed(my_data, delta = 1.5, burn_in = 50, threshold = 5)
+
+# Find first alarm after burn-in
+alarm_indices <- which(result_fixed > 5)
+alarm_indices[1]
+
+```
+
+
+```{r}
+# Check if any alarm happened before the anomaly
+pre_anomaly_alarms <- which(result_fixed[1:500] > 5)
+cat("Detection delay:", alarm_indices[1] - change_point, "observations\n")
+if (length(pre_anomaly_alarms) == 0) {
+  cat("No false alarms before anomaly. Good!\n")
+} else {
+  cat("False alarms at:", pre_anomaly_alarms, "\n")
+}
+
+```
+
+
+
+```{r}
+# ============================================
+# Full Simulation: 1,000 Runs
+# Robustified CUSUM with Burn-in
+# ============================================
+
+# Clear and set seed for reproducibility
+rm(list = ls())
+set.seed(123)
+
+# Parameters
+n_sim <- 1000          # number of simulations
+n <- 1000              # observations per simulation
+change_point <- 500    # anomaly starts here
+burn_in <- 50          # wait 50 observations before monitoring
+threshold <- 5         # alarm threshold
+delta <- 1.5           # CUSUM reference value
+
+# Store results
+detection_delays <- c()
+
+# Define the robust CUSUM function
+robust_cusum_fixed <- function(x, delta = 1.5, burn_in = 50) {
+  
+  psi_huber <- function(u, c = 1.345) {
+    ifelse(abs(u) <= c, u, c * sign(u))
+  }
+  
+  n <- length(x)
+  mu_hat <- numeric(n)
+  sigma_hat <- numeric(n)
+  S <- numeric(n)
+  
+  mu_hat[1] <- x[1]
+  sigma_hat[1] <- 1
+  S[1] <- 0
+  
+  for (t in 2:n) {
+    r <- (x[t] - mu_hat[t-1]) / sigma_hat[t-1]
+    psi_val <- psi_huber(r)
+    mu_hat[t] <- mu_hat[t-1] + (1/t) * psi_val * sigma_hat[t-1]
+    chi_val <- psi_val^2 / 0.6827
+    sigma_hat[t] <- sqrt(sigma_hat[t-1]^2 + (1/(t-1)) * (chi_val * sigma_hat[t-1]^2 - sigma_hat[t-1]^2))
+    r_new <- (x[t] - mu_hat[t-1]) / sigma_hat[t-1]
+    
+    if (t > burn_in) {
+      S[t] <- max(0, S[t-1] + r_new - delta)
+    } else {
+      S[t] <- 0
+    }
+  }
+  
+  return(S)
+}
+
+# Run simulations
+cat("Starting", n_sim, "simulations...\n")
+cat("This will take about 5-10 minutes\n\n")
+
+for (i in 1:n_sim) {
+  
+  # Generate data for this simulation
+  normal_part <- rnorm(change_point, mean = 0, sd = 1)
+  anomaly_part <- rnorm(n - change_point, mean = 1, sd = 2)
+  my_data <- c(normal_part, anomaly_part)
+  
+  # Run robust CUSUM
+  S <- robust_cusum_fixed(my_data, delta = delta, burn_in = burn_in)
+  
+  # Find first alarm after anomaly starts (observation 500)
+  S_after_change <- S[change_point:length(S)]
+  alarm_index <- which(S_after_change > threshold)[1]
+  
+  if (!is.na(alarm_index)) {
+    alarm_time <- change_point + alarm_index - 1
+    delay <- alarm_time - change_point
+    detection_delays <- c(detection_delays, delay)
+  }
+  
+  # Show progress every 100 simulations
+  if (i %% 100 == 0) {
+    cat("Completed", i, "simulations\n")
+  }
+}
+
+# Results
+cat("\n========== RESULTS ==========\n")
+cat("Number of successful detections:", length(detection_delays), "out of", n_sim, "\n")
+cat("Average detection delay:", mean(detection_delays), "observations\n")
+cat("Minimum detection delay:", min(detection_delays), "\n")
+cat("Maximum detection delay:", max(detection_delays), "\n")
+#standard deviation
+sd(detection_delays)
+
+```
+
+
+```{r}
+library(ggplot2)
+# Create the ggplot histogram
+scenario_2_plot<-ggplot(data = data.frame(detection_delays), aes(x = detection_delays)) +
+  geom_histogram(bins = 30, fill = "steelblue", color = "white") +
+  labs(
+    title = "Scenario 1: Distribution of Detection Delays",
+    x = "Detection Delay (observations after anomaly)",
+    y = "Frequency"
+  ) +
+
+  geom_vline(
+    aes(xintercept = mean(detection_delays)),
+    color = "red",
+    linewidth = 2,
+    linetype = "dashed"
+  ) +
+  annotate(
+    "text",
+    x = mean(detection_delays) + 80,
+    y = 50,
+    label = paste("Mean =", round(mean(detection_delays), 1)),
+    color = "red"
+  ) +
+  theme_minimal()
+ggsave("scenario_2.tiff",scenario_2_plot, dpi = 300)
+
+
+```
+
+```{r}
+# Standard CUSUM function (for comparison)
+standard_cusum <- function(x, delta = 0.5, burn_in = 50, threshold = 5) {
+  
+  n <- length(x)
+  mu_hat <- numeric(n)
+  sigma_hat <- numeric(n)
+  S <- numeric(n)
+  
+  # Initial estimates from first 50 observations
+  mu_hat[1:burn_in] <- mean(x[1:burn_in])
+  sigma_hat[1:burn_in] <- sd(x[1:burn_in])
+  S[1] <- 0
+  
+  for (t in (burn_in+1):n) {
+    r <- (x[t] - mu_hat[t-1]) / sigma_hat[t-1]
+    S[t] <- max(0, S[t-1] + r - delta)
+  }
+  
+  return(S)
+}
+
+# Run standard CUSUM once to see if it works
+my_data <- c(rnorm(500, mean = 0, sd = 1), rnorm(500, mean = 1, sd = 2))
+S_standard <- standard_cusum(my_data, delta = 0.5, burn_in = 50, threshold = 5)
+
+# Find first alarm after anomaly
+S_after <- S_standard[500:1000]
+alarm_index <- which(S_after > 5)[1]
+
+if (!is.na(alarm_index)) {
+  cat("Standard CUSUM alarm at observation:", 500 + alarm_index - 1, "\n")
+} else {
+  cat("Standard CUSUM never raised alarm\n")
+}
+# Check the standard CUSUM values
+summary(S_standard)
+```
+
+
+
+```{r}
+# ============================================
+# Scenario 3: Pure Variance Change Simulation
+# Mean stays constant (μ = 0)
+# Variance increases: 1 -> 4 at t = 500
+# ============================================
+
+rm(list = ls())
+set.seed(123)
+
+# Parameters
+n_sim <- 1000
+n <- 1000
+change_point <- 500
+burn_in <- 50
+threshold <- 5
+delta <- 1.5
+
+# Store results
+detection_delays <- c()
+
+# Define the robust CUSUM function
+robust_cusum_fixed <- function(x, delta = 1.5, burn_in = 50) {
+  
+  psi_huber <- function(u, c = 1.345) {
+    ifelse(abs(u) <= c, u, c * sign(u))
+  }
+  
+  n <- length(x)
+  mu_hat <- numeric(n)
+  sigma_hat <- numeric(n)
+  S <- numeric(n)
+  
+  mu_hat[1] <- x[1]
+  sigma_hat[1] <- 1
+  S[1] <- 0
+  
+  for (t in 2:n) {
+    r <- (x[t] - mu_hat[t-1]) / sigma_hat[t-1]
+    psi_val <- psi_huber(r)
+    mu_hat[t] <- mu_hat[t-1] + (1/t) * psi_val * sigma_hat[t-1]
+    chi_val <- psi_val^2 / 0.6827
+    sigma_hat[t] <- sqrt(sigma_hat[t-1]^2 + (1/(t-1)) * (chi_val * sigma_hat[t-1]^2 - sigma_hat[t-1]^2))
+    r_new <- (x[t] - mu_hat[t-1]) / sigma_hat[t-1]
+    
+    if (t > burn_in) {
+      S[t] <- max(0, S[t-1] + r_new - delta)
+    } else {
+      S[t] <- 0
+    }
+  }
+  
+  return(S)
+}
+
+# Run simulations
+cat("Running 1,000 simulations for Pure Variance Change (μ stays 0, σ: 1 -> 2)...\n")
+
+for (i in 1:n_sim) {
+  
+  # Generate pure variance change data
+  # Mean is ALWAYS 0 (both before and after)
+  normal_part <- rnorm(change_point, mean = 0, sd = 1)      # variance = 1
+  anomaly_part <- rnorm(n - change_point, mean = 0, sd = 2) # variance = 4
+  my_data <- c(normal_part, anomaly_part)
+  
+  # Run robust CUSUM
+  S <- robust_cusum_fixed(my_data, delta = delta, burn_in = burn_in)
+  
+  # Find first alarm after anomaly starts
+  S_after_change <- S[change_point:length(S)]
+  alarm_index <- which(S_after_change > threshold)[1]
+  
+  if (!is.na(alarm_index)) {
+    alarm_time <- change_point + alarm_index - 1
+    delay <- alarm_time - change_point
+    detection_delays <- c(detection_delays, delay)
+  }
+  
+  if (i %% 100 == 0) {
+    cat("Completed", i, "simulations\n")
+  }
+}
+
+# Results
+cat("\n========== RESULTS ==========\n")
+cat("Successful detections:", length(detection_delays), "out of", n_sim, "\n")
+cat("Average detection delay:", mean(detection_delays), "observations\n")
+cat("Standard deviation:", round(sd(detection_delays), 2), "\n")
+cat("Minimum delay:", min(detection_delays), "\n")
+cat("Maximum delay:", max(detection_delays), "\n")
+
+```
+
+```{r}
+library(ggplot2)
+# Create the ggplot histogram
+scenario3_plot<-ggplot(data = data.frame(detection_delays), aes(x = detection_delays)) +
+  geom_histogram(bins = 30, fill = "steelblue", color = "white") +
+  labs(
+    title = "Scenario 3: Pure Variance Change: Detection Delays",
+    x = "Detection Delay (observations after variance increase)",
+    y = "Frequency"
+  ) +
+  geom_vline(
+    aes(xintercept = mean(detection_delays)),
+    color = "red",
+    linewidth = 2,
+    linetype = "dashed"
+  ) +
+  annotate(
+    "text",
+    x = mean(detection_delays) + 70,
+    y = 50,
+    label = paste("Mean =", round(mean(detection_delays), 1)),
+    color = "red"
+  ) +
+  theme_minimal()
+ggsave("scenario_3.tiff",scenario3_plot, dpi = 300)
+```
+
+
+```{r}
+#Scenario 4: Festival spike(UPI-like)
+# Clear and set seed
+rm(list = ls())
+set.seed(123)
+
+# Parameters
+n <- 1000
+change_point <- 500      # anomaly starts here
+spike_end <- 600         # festival spike ends here
+
+# Create empty data vector
+my_data <- numeric(n)
+
+# Generate data
+for (t in 1:n) {
+  if (t < change_point) {
+    # Before anomaly: mean 0, sd 1
+    my_data[t] <- rnorm(1, mean = 0, sd = 1)
+  } else if (t <= spike_end) {
+    # During festival spike: mean 1, sd 3 (variance 9)
+    my_data[t] <- rnorm(1, mean = 1, sd = 3)
+  } else {
+    # After spike: mean 1, sd 1 (variance back to 1)
+    my_data[t] <- rnorm(1, mean = 1, sd = 1)
+  }
+}
+
+# Look at first 20 and last 20
+head(my_data, 20)
+tail(my_data, 20)
+
+
+# Your robust CUSUM function (same as before)
+robust_cusum_fixed <- function(x, delta = 1.5, burn_in = 50, threshold = 5) {
+  
+  psi_huber <- function(u, c = 1.345) {
+    ifelse(abs(u) <= c, u, c * sign(u))
+  }
+  
+  n <- length(x)
+  mu_hat <- numeric(n)
+  sigma_hat <- numeric(n)
+  S <- numeric(n)
+  
+  mu_hat[1] <- x[1]
+  sigma_hat[1] <- 1
+  S[1] <- 0
+  
+  for (t in 2:n) {
+    r <- (x[t] - mu_hat[t-1]) / sigma_hat[t-1]
+    psi_val <- psi_huber(r)
+    mu_hat[t] <- mu_hat[t-1] + (1/t) * psi_val * sigma_hat[t-1]
+    chi_val <- psi_val^2 / 0.6827
+    sigma_hat[t] <- sqrt(sigma_hat[t-1]^2 + (1/(t-1)) * (chi_val * sigma_hat[t-1]^2 - sigma_hat[t-1]^2))
+    r_new <- (x[t] - mu_hat[t-1]) / sigma_hat[t-1]
+    
+    if (t > burn_in) {
+      S[t] <- max(0, S[t-1] + r_new - delta)
+    } else {
+      S[t] <- 0
+    }
+  }
+  
+  return(S)
+}
+
+
+# Run robust CUSUM
+result <- robust_cusum_fixed(my_data, delta = 1.5, burn_in = 50)
+
+# Find first alarm after anomaly starts (observation 500)
+S_after <- result[500:1000]
+alarm_index <- which(S_after > 5)[1]
+
+if (!is.na(alarm_index)) {
+  alarm_time <- 500 + alarm_index - 1
+  cat("Alarm raised at observation:", alarm_time, "\n")
+  cat("Detection delay:", alarm_time - 500, "observations\n")
+} else {
+  cat("No alarm raised\n")
+}
+```
+
+
+```{r}
+# Full simulation for Scenario 4 (Festival Spike)
+
+rm(list = ls())
+set.seed(123)
+
+n_sim <- 1000
+n <- 1000
+change_point <- 500
+spike_end <- 600
+burn_in <- 50
+threshold <- 5
+delta <- 1.5
+
+detection_delays <- c()
+
+# Define function
+robust_cusum_fixed <- function(x, delta = 1.5, burn_in = 50) {
+  
+  psi_huber <- function(u, c = 1.345) {
+    ifelse(abs(u) <= c, u, c * sign(u))
+  }
+  
+  n <- length(x)
+  mu_hat <- numeric(n)
+  sigma_hat <- numeric(n)
+  S <- numeric(n)
+  
+  mu_hat[1] <- x[1]
+  sigma_hat[1] <- 1
+  S[1] <- 0
+  
+  for (t in 2:n) {
+    r <- (x[t] - mu_hat[t-1]) / sigma_hat[t-1]
+    psi_val <- psi_huber(r)
+    mu_hat[t] <- mu_hat[t-1] + (1/t) * psi_val * sigma_hat[t-1]
+    chi_val <- psi_val^2 / 0.6827
+    sigma_hat[t] <- sqrt(sigma_hat[t-1]^2 + (1/(t-1)) * (chi_val * sigma_hat[t-1]^2 - sigma_hat[t-1]^2))
+    r_new <- (x[t] - mu_hat[t-1]) / sigma_hat[t-1]
+    
+    if (t > burn_in) {
+      S[t] <- max(0, S[t-1] + r_new - delta)
+    } else {
+      S[t] <- 0
+    }
+  }
+  return(S)
+}
+
+# Run simulations
+cat("Running 1,000 simulations for Scenario 4 (Festival Spike)...\n")
+
+for (i in 1:n_sim) {
+  
+  # Generate Scenario 4 data
+  my_data <- numeric(n)
+  for (t in 1:n) {
+    if (t < change_point) {
+      my_data[t] <- rnorm(1, mean = 0, sd = 1)
+    } else if (t <= spike_end) {
+      my_data[t] <- rnorm(1, mean = 1, sd = 3)
+    } else {
+      my_data[t] <- rnorm(1, mean = 1, sd = 1)
+    }
+  }
+  
+  # Run robust CUSUM
+  S <- robust_cusum_fixed(my_data, delta = delta, burn_in = burn_in)
+  
+  # Find first alarm after anomaly starts
+  S_after_change <- S[change_point:length(S)]
+  alarm_index <- which(S_after_change > threshold)[1]
+  
+  if (!is.na(alarm_index)) {
+    alarm_time <- change_point + alarm_index - 1
+    delay <- alarm_time - change_point
+    detection_delays <- c(detection_delays, delay)
+  }
+  
+  if (i %% 100 == 0) {
+    cat("Completed", i, "simulations\n")
+  }
+}
+
+# Results
+cat("\n========== SCENARIO 4 RESULTS ==========\n")
+cat("Successful detections:", length(detection_delays), "out of", n_sim, "\n")
+cat("Average detection delay:", mean(detection_delays), "observations\n")
+cat("Standard deviation:", round(sd(detection_delays), 2), "\n")
+cat("Minimum delay:", min(detection_delays), "\n")
+cat("Maximum delay:", max(detection_delays), "\n")
+```
+
+
+```{r}
+library(ggplot2)
+# Create the ggplot histogram
+scenario4_plot<-ggplot(data = data.frame(detection_delays), aes(x = detection_delays)) +
+  geom_histogram(bins = 30, fill = "steelblue", color = "white") +
+  labs(
+    title = "Scenario 2: Festival Spike - Detection Delays",
+    x = "Detection Delay (observations after anomaly)",
+    y = "Frequency"
+  ) +
+  geom_vline(
+    aes(xintercept = mean(detection_delays)),
+    color = "red",
+    linewidth = 2,
+    linetype = "dashed"
+  ) +
+  annotate(
+    "text",
+    x = mean(detection_delays) + 30,
+    y = 50,
+    label = paste("Mean =", round(mean(detection_delays), 1)),
+    color = "red"
+  ) +
+  theme_minimal()
+ggsave("scenario_4.tiff",scenario4_plot, dpi = 300)
+
+```
+
+
+```{r}
+# Histogram
+hist(detection_delays, 
+     main = "Scenario 4: Festival Spike - Detection Delays",
+     xlab = "Detection Delay (observations after anomaly)",
+     col = "steelblue",
+     border = "white",
+     breaks = 30)
+abline(v = mean(detection_delays), col = "red", lwd = 2, lty = 2)
+#add a text label for the mean
+text(x=mean(detection_delays)+30, y=50,
+     labels = paste("Mean=",round(mean(detection_delays),1)),
+     col="red")
+```
+
+
