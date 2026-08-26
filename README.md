@@ -37,7 +37,7 @@ install.packages(
 
 ## How to run
 1. Clone this repository
-2. Open R
+2. Open R Studio 
 3. Run the markdown script `Robustified_CUSUM_Code.Rmd’
 
 ## Contact
