@@ -21,13 +21,19 @@ accepted at ICCIS 2026.
 - Detection rates: 51.8% – 100%
 - Average delays: 11.4 – 127.5 observations
 
-## Requirements
-- R (version 4.0 or higher)
-  ```r
+### Requirements
+
+- **R version:** 4.3 or higher
+- **RStudio:** Recommended for knitting the `.Rmd` file
+
+### Required R Packages
+
+```r
 install.packages(
-  "ggplot2"    # Grammar of Graphics
+  "ggplot2",     # Grammar of Graphics
 )
 ```
+
 
 ## How to run
 1. Clone this repository
