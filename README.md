@@ -28,8 +28,7 @@ accepted at ICCIS 2026.
 ## How to run
 1. Clone this repository
 2. Open R
-3. Run the script `Robustified_CUSUM_Code.R`
-
+3. Run the markdown script `Robustified_CUSUM_Code.Rmd’
 ## Citation
 If you use this code, please cite:
 [Your paper details once published]
