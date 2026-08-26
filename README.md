@@ -28,10 +28,12 @@ install.packages(
   "ggplot2"    # Grammar of Graphics
 )
 ```
+
 ## How to run
 1. Clone this repository
 2. Open R
 3. Run the markdown script `Robustified_CUSUM_Code.Rmd’
+
 ## Contact
 Vobo Godlove Watoh
 vobo.caleb@yahoo.com
