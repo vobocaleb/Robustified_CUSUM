@@ -12,9 +12,10 @@ accepted at ICCIS 2026.
 - Compares performance with standard CUSUM
 
 ## Simulation Scenarios
-- Scenario 1: Step variance change + mean shift
-- Scenario 2: Festival spike (UPI-like)
-- Scenario 3: Pure variance change (no mean shift)
+- Scenario 1: No variance Change: This scenario was not considered 
+- Scenario 2: Step variance change + mean shift
+- Scenario 3: Festival spike (UPI-like)
+- Scenario 4: Pure variance change (no mean shift)
 
 ## Results
 - Detection rates: 51.8% – 100%
