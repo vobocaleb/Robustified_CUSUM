@@ -23,10 +23,12 @@ accepted at ICCIS 2026.
 
 ## Requirements
 - R (version 4.0 or higher)
-- ‘’’r
--  install.packages(
+
+  ```r
+install.packages(
   "ggplot2",     # Grammar of Graphics
- )’’’
+)
+```
 
 ## How to run
 1. Clone this repository
